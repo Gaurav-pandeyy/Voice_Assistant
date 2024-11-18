@@ -13,7 +13,7 @@ def send_email():
         return
 
 
-    receiver_email = input("Enter receiver's email: ")
+    receiver_email = "gaurapande871gmail.com"
     subject = input("SUBJECT: ")
     message = input("MESSAGE: ")
     text = f"Subject: {subject}\n\n{message}"

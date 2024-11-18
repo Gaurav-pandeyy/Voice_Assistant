@@ -1,23 +1,35 @@
-
+import json
 import speech_recognition as sr
 import datetime
 import pyttsx3
 import requests
 from Extra_Tasks import send_email
+import time
+import spacy
 
+
+# Load configuration
+def load_config():
+    with open("config.json", "r") as f:
+        config = json.load(f)
+    return config
+
+
+config = load_config()
+WAKE_WORDS = config["wake_words"]  # List of wake words
 
 recognizer = sr.Recognizer()
 engine = pyttsx3.init()
+nlp = spacy.load("en_core_web_sm")  # Load spaCy language model
 
 
-WAKE_WORD = "wake up"
-
-
+# Speak text using pyttsx3
 def speak(text):
     engine.say(text)
     engine.runAndWait()
 
 
+# Listen for voice commands
 def listen_for_command():
     with sr.Microphone() as source:
         print("Listening for command...")
@@ -31,11 +43,40 @@ def listen_for_command():
         return command
 
 
-def handle_send_email():
-    print("To whom should I send the email?")
-    speak("To whom should I send the email?")
-    recipient = listen_for_command()
+# Analyze command using spaCy
+def analyze(command):
+    doc = nlp(command)
 
+    # Print tokens for debugging
+    print("Tokens:")
+    for token in doc:
+        print(f"{token.text} - {token.pos_}")
+
+    # Print named entities for debugging
+    print("\nNamed Entities:")
+    for ent in doc.ents:
+        print(f"{ent.text} ({ent.label_}) - {spacy.explain(ent.label_)}")
+
+    # Determine intent based on command content
+    if "email" in command or any(token.text.lower() == "email" for token in doc):
+        print("\nIntent: Send Email")
+        recipient = [ent.text for ent in doc.ents if ent.label_ == "PERSON"]
+        return {"intent": "email", "recipient": recipient}
+
+    if "weather" in command or any(token.text.lower() == "weather" for token in doc):
+        print("\nIntent: Get Weather")
+        city = [ent.text for ent in doc.ents if ent.label_ == "GPE"]
+        return {"intent": "weather", "city": city}
+
+    if "time" in command or any(token.text.lower() == "time" for token in doc):
+        print("\nIntent: Get Time")
+        return {"intent": "time"}
+
+    return {"intent": "unknown"}
+
+
+# Handle email sending
+def handle_send_email():
     print("What is the subject of the email?")
     speak("What is the subject of the email?")
     subject = listen_for_command()
@@ -44,31 +85,18 @@ def handle_send_email():
     speak("What should I say in the email?")
     message = listen_for_command()
 
-
-    response = send_email(recipient, subject, message)
+    response = send_email(subject, message)
     print(response)
     speak(response)
 
 
-def listen_for_wake_word():
-    with sr.Microphone() as source:
-        print("Listening for wake word...")
-        audio = recognizer.listen(source)
-        try:
-            command = recognizer.recognize_google(audio).lower()
-            print("Heard:", command)
-            if WAKE_WORD in command:
-                return True
-        except sr.UnknownValueError:
-            pass
-        return False
-
-
+# Ask for city name if not provided
 def get_city_name():
-    print("Please say the name of the city you want the weather info for.")
-    speak("Please say the name of the city you want the weather info for.")
+    print("Which city's weather would you like to know?")
+    speak("Which city's weather would you like to know?")
     city_name = listen_for_command()
     if city_name:
+        city_name = city_name.strip()
         print("City:", city_name)
         return city_name
     else:
@@ -77,8 +105,9 @@ def get_city_name():
         return ""
 
 
+# Fetch weather using OpenWeatherMap API
 def weather_api(city_name):
-    api_key = "your_openweathermap_api_key"
+    api_key = "1632e63a399027cee77feffe63353bc2"
     base_url = "https://api.openweathermap.org/data/2.5/weather?"
 
     params = {
@@ -98,9 +127,9 @@ def weather_api(city_name):
         wind_speed = data['wind']['speed']
 
         weather_info = (
-            f"The weather in {city_name} is currently {weather_description}, "
-            f"with a temperature of {temperature}°C, feels like {feels_like}°C. "
-            f"The humidity is {humidity}%, and the wind speed is {wind_speed} meters per second."
+            f"The weather in {city_name} is currently {weather_description}, \n"
+            f"with a temperature of {temperature}°C, feels like {feels_like}°C. \n"
+            f"The humidity is {humidity}%, and the wind speed is {wind_speed} meters per second.\n"
         )
 
         print(weather_info)
@@ -111,37 +140,76 @@ def weather_api(city_name):
         speak(error_message)
 
 
+# Handle commands based on intent
 def handle_command(command):
-    if "time" in command:
+    analysis = analyze(command)  # Use spaCy to determine intent and extract info
+    intent = analysis.get("intent")
+
+    if intent == "time":
         current_time = datetime.datetime.now().strftime("%I:%M %p")
         print(f"The time is {current_time}")
         speak(f"The time is {current_time}")
 
-    elif "name" in command:
-        print("Hello, I am your assistant!")
-        speak("Hello, I am your assistant!")
-
-    elif "weather" in command:
-        city_name = get_city_name()
+    elif intent == "weather":
+        city_name = analysis.get("city")
         if city_name:
-            weather_api(city_name)
+            weather_api(city_name[0])  # Use the first detected city
+        else:
+            # Ask user for city name if not detected
+            city_name = get_city_name()
+            if city_name:
+                weather_api(city_name)
 
-    elif "send email" in command:
+    elif intent == "email":
+        recipient = analysis.get("recipient")
         handle_send_email()
+        # Optional: Use recipient for further customization
 
     else:
         print("Sorry, I didn't understand that command.")
         speak("Sorry, I didn't understand that command.")
 
 
-while True:
-    if listen_for_wake_word():
-        print("Wake word detected. Ready for command.")
-        speak("Yes, how can I assist you?")
-        command = listen_for_command()
-        if command:
-            handle_command(command)
-        if "stop" in command or "exit" in command:
-            print("Goodbye!")
-            speak("Goodbye!")
-            break
+# Listen for wake word
+def listen_for_wake_word():
+    with sr.Microphone() as source:
+        print(f"Listening for wake words: {', '.join(WAKE_WORDS)}...")
+        audio = recognizer.listen(source)
+        try:
+            command = recognizer.recognize_google(audio).lower()
+            print("Heard:", command)
+            for wake_word in WAKE_WORDS:
+                if wake_word in command:
+                    return True
+        except sr.UnknownValueError:
+            pass
+        return False
+
+
+# Main loop with KeyboardInterrupt exception handling
+try:
+    while True:
+        if listen_for_wake_word():
+            print("Wake word detected. Ready for command.")
+            speak("Yes, how can I assist you?")
+
+            while True:
+                command = listen_for_command()
+
+                if command:
+                    handle_command(command)
+
+                    if "stop" in command or "exit" in command:
+                        print("Goodbye!")
+                        speak("Goodbye!")
+                        time.sleep(1)
+                        break
+
+                time.sleep(0.5)
+
+except KeyboardInterrupt:
+    print("\nProgram interrupted. Exiting...")
+    speak("Program interrupted. Exiting...")
+    recognizer = None
+    engine.stop()
+    time.sleep(1)
