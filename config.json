@@ -1,4 +1,4 @@
 {
-  "wake_words": ["alexa", "okay google", "wake up"],
+  "wake_words": ["alexa", "ok google", "wake up"],
   "weather_unit": "Celsius"
 }
