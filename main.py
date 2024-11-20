@@ -106,7 +106,7 @@ def handle_send_email():
 
 # Fetch weather using OpenWeatherMap API
 def weather_api(city_name):
-    api_key = ""
+    api_key = "1632e63a399027cee77feffe63353bc2"
     base_url = "https://api.openweathermap.org/data/2.5/weather?"
 
     params = {
@@ -200,7 +200,7 @@ try:
 
                     if "stop" in command or "exit" in command:
                         print("Goodbye!")
-                        speak("Goodbye!")
+
                         time.sleep(1)
                         break
 
