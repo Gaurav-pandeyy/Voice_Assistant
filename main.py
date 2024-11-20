@@ -106,7 +106,7 @@ def handle_send_email():
 
 # Fetch weather using OpenWeatherMap API
 def weather_api(city_name):
-    api_key = "1632e63a399027cee77feffe63353bc2"
+    api_key = ""
     base_url = "https://api.openweathermap.org/data/2.5/weather?"
 
     params = {
