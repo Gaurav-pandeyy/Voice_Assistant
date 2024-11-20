@@ -7,13 +7,11 @@ from Extra_Tasks import send_email
 import time
 import spacy
 
-
-
+# Configuration setup
 def load_config():
     with open("config.json", "r") as f:
         config = json.load(f)
     return config
-
 
 config = load_config()
 WAKE_WORDS = config["wake_words"]
@@ -22,14 +20,12 @@ recognizer = sr.Recognizer()
 engine = pyttsx3.init()
 nlp = spacy.load("en_core_web_sm")
 
-
-
+# Speak text using pyttsx3
 def speak(text):
     engine.say(text)
     engine.runAndWait()
 
-
-
+# Listen for voice commands
 def listen_for_command():
     with sr.Microphone() as source:
         print("Listening for command...")
@@ -41,91 +37,6 @@ def listen_for_command():
             print("Sorry, I didn't catch that.")
             return ""
         return command
-
-
-
-def analyze(command):
-
-    command = command.lower()
-
-
-    doc = nlp(command)
-
-
-    intents = {
-        "email": ["email", "send", "message", "write"],
-        "weather": ["weather", "temperature", "forecast"],
-        "time": ["time", "current time", "now"],
-        "reminder": ["remind", "remember", "schedule"],
-        "search": ["find", "search", "lookup"]
-    }
-
-
-    detected_intent = "unknown"
-    for intent, keywords in intents.items():
-        if any(keyword in command for keyword in keywords):
-            detected_intent = intent
-            break
-
-
-    context = {}
-
-
-    entities = {
-        "person": [ent.text for ent in doc.ents if ent.label_ == "PERSON"],
-        "location": [ent.text for ent in doc.ents if ent.label_ in ["GPE", "LOC"]],
-        "date": [ent.text for ent in doc.ents if ent.label_ == "DATE"]
-    }
-
-
-    if detected_intent == "email":
-        context["recipients"] = entities["person"]
-
-    elif detected_intent == "weather":
-        context["cities"] = entities["location"]
-
-    elif detected_intent == "reminder":
-        context["date"] = entities["date"]
-
-    return {
-        "intent": detected_intent,
-        "entities": entities,
-        "context": context,
-        "original_command": command
-    }
-
-
-def handle_command(command):
-
-    analysis = analyze(command)
-    intent = analysis["intent"]
-
-    intent_handlers = {
-        "time": lambda: speak(f"The current time is {datetime.datetime.now().strftime('%I:%M %p')}"),
-        "weather": lambda: weather_api(
-            analysis["context"]["cities"][0] if analysis["context"]["cities"] else get_city_name()),
-        "email": handle_send_email,
-        "unknown": lambda: speak("Sorry, I didn't understand that command.")
-    }
-
-    # Execute appropriate handler
-    intent_handlers.get(intent, intent_handlers["unknown"])()
-
-
-
-def handle_send_email():
-    print("What is the subject of the email?")
-    speak("What is the subject of the email?")
-    subject = listen_for_command()
-
-    print("What should I say in the email?")
-    speak("What should I say in the email?")
-    message = listen_for_command()
-
-    response = send_email(subject, message)
-    print(response)
-    speak(response)
-
 
 # Ask for city name if not provided
 def get_city_name():
@@ -141,6 +52,57 @@ def get_city_name():
         speak("Couldn't capture the city name.")
         return ""
 
+# Analyze command using spaCy
+def analyze(command):
+    command = command.lower()
+    doc = nlp(command)
+
+    intents = {
+        "email": ["email", "send", "message", "write"],
+        "weather": ["weather", "temperature", "forecast"],
+        "time": ["time", "current time", "now"],
+    }
+
+    detected_intent = "unknown"
+    for intent, keywords in intents.items():
+        if any(keyword in command for keyword in keywords):
+            detected_intent = intent
+            break
+
+    context = {}
+    entities = {
+        "person": [ent.text for ent in doc.ents if ent.label_ == "PERSON"],
+        "location": [ent.text for ent in doc.ents if ent.label_ in ["GPE", "LOC"]],
+        "date": [ent.text for ent in doc.ents if ent.label_ == "DATE"]
+    }
+
+    if detected_intent == "email":
+        context["recipients"] = entities["person"]
+    elif detected_intent == "weather":
+        context["cities"] = entities["location"]
+    elif detected_intent == "reminder":
+        context["date"] = entities["date"]
+
+    return {
+        "intent": detected_intent,
+        "entities": entities,
+        "context": context,
+        "original_command": command
+    }
+
+# Handle email sending
+def handle_send_email():
+    print("What is the subject of the email?")
+    speak("What is the subject of the email?")
+    subject = listen_for_command()
+
+    print("What should I say in the email?")
+    speak("What should I say in the email?")
+    message = listen_for_command()
+
+    response = send_email(subject, message)
+    print(response)
+    speak(response)
 
 # Fetch weather using OpenWeatherMap API
 def weather_api(city_name):
@@ -176,7 +138,6 @@ def weather_api(city_name):
         print(error_message)
         speak(error_message)
 
-
 # Handle commands based on intent
 def handle_command(command):
     analysis = analyze(command)  # Use spaCy to determine intent and extract info
@@ -201,13 +162,13 @@ def handle_command(command):
         recipient = analysis.get("recipient")
         handle_send_email()
         # Optional: Use recipient for further customization
-    elif intent =="exit" or "stop":
-        print("")
-        speak("")
+    elif intent == "exit" or "stop":
+        print("Goodbye!")
+        speak("Goodbye!")
+        time.sleep(1)
     else:
         print("Sorry, I didn't understand that command.")
         speak("Sorry, I didn't understand that command.")
-
 
 # Listen for wake word
 def listen_for_wake_word():
@@ -223,7 +184,6 @@ def listen_for_wake_word():
         except sr.UnknownValueError:
             pass
         return False
-
 
 # Main loop with KeyboardInterrupt exception handling
 try:
